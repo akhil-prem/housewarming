@@ -578,7 +578,7 @@
   <header class="hero">
     <button type="button" class="hosts-stage" id="hosts-stage" aria-label="Play our invitation">
       <img class="hosts-still" src="still.jpg" width="1280" height="720" alt="Akhil and Aswathi">
-      <video class="hosts-live" id="hosts-live" autoplay playsinline webkit-playsinline preload="auto" poster="still.jpg" width="1280" height="720">
+      <video class="hosts-live" id="hosts-live" autoplay muted playsinline webkit-playsinline preload="auto" poster="still.jpg" width="1280" height="720">
         <source src="housewarming.mp4" type="video/mp4">
       </video>
       <span class="sound-prompt" aria-hidden="true">
@@ -821,19 +821,19 @@
         hostsLive.volume = 1;
         hostsLive.muted = !withSound;
         var pending = hostsLive.play();
-        if (pending && pending.then) {
-          return pending.then(function () {
-            markSound(!hostsLive.muted);
-          }).catch(function () {
-            if (withSound) return startTalking(false);
-            showStill();
-          });
+        if (!(pending && pending.then)) {
+          markSound(withSound);
+          return Promise.resolve();
         }
-        markSound(withSound);
+        return pending.then(function () {
+          markSound(!hostsLive.muted);
+        }).catch(function () {
+          if (withSound) return startTalking(false);
+          showStill();
+        });
       }
       function unlockSound() {
         if (soundReady) return;
-        soundReady = true;
         hostsLive.currentTime = 0;
         startTalking(true);
       }
@@ -845,8 +845,23 @@
       ["pointerdown", "keydown"].forEach(function (eventName) {
         document.addEventListener(eventName, unlockSound, { capture: true });
       });
-      if (hostsLive.readyState >= 2) startTalking(true);
-      else hostsLive.addEventListener("canplay", function () { startTalking(true); }, { once: true });
+      function startOnLoad() {
+        startTalking(false).then(function () {
+          if (soundReady) return;
+          hostsLive.muted = false;
+          var unmute = hostsLive.play();
+          if (unmute && unmute.then) {
+            unmute.then(function () {
+              markSound(!hostsLive.muted);
+            }).catch(function () {
+              hostsLive.muted = true;
+              markSound(false);
+            });
+          }
+        });
+      }
+      if (hostsLive.readyState >= 2) startOnLoad();
+      else hostsLive.addEventListener("canplay", startOnLoad, { once: true });
     })();
   </script>
 </body>
