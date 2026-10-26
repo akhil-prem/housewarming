@@ -135,6 +135,30 @@
     .hosts-stage.is-playing .hosts-still { visibility: hidden; }
     .hosts-stage:not(.is-playing) .hosts-live { visibility: hidden; }
 
+    .sound-prompt {
+      position: absolute;
+      right: 10%;
+      bottom: 7%;
+      z-index: 2;
+      display: none;
+      align-items: center;
+      gap: 9px;
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      box-shadow: 0 12px 30px rgba(28, 25, 22, 0.16);
+      pointer-events: none;
+    }
+
+    .hosts-stage.needs-sound .sound-prompt { display: inline-flex; }
+
     .stack {
       position: relative;
       z-index: 1;
@@ -498,6 +522,13 @@
         mask-image: none;
       }
 
+      .sound-prompt {
+        right: 50%;
+        bottom: 8%;
+        transform: translateX(50%);
+        white-space: nowrap;
+      }
+
       .stack {
         width: min(540px, calc(100% - 48px));
         margin: 0 auto;
@@ -547,9 +578,15 @@
   <header class="hero">
     <button type="button" class="hosts-stage" id="hosts-stage" aria-label="Play our invitation">
       <img class="hosts-still" src="still.jpg" width="1280" height="720" alt="Akhil and Aswathi">
-      <video class="hosts-live" id="hosts-live" autoplay playsinline preload="auto" poster="still.jpg" width="1280" height="720">
+      <video class="hosts-live" id="hosts-live" autoplay playsinline webkit-playsinline preload="auto" poster="still.jpg" width="1280" height="720">
         <source src="housewarming.mp4" type="video/mp4">
       </video>
+      <span class="sound-prompt" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24">
+          <path d="M5 9v6h4l5 4V5L9 9H5zm12.5 3a4.5 4.5 0 0 0-2.1-3.8v7.6a4.5 4.5 0 0 0 2.1-3.8z" fill="currentColor"/>
+        </svg>
+        Tap for sound
+      </span>
     </button>
     <div class="stack">
       <p class="eyebrow">Housewarming</p>
@@ -766,26 +803,50 @@
 
       var hostsStage = document.getElementById("hosts-stage");
       var hostsLive = document.getElementById("hosts-live");
+      var soundReady = false;
       function showStill() {
         hostsStage.classList.remove("is-playing");
+        hostsStage.classList.remove("needs-sound");
+        hostsStage.setAttribute("aria-label", "Replay our invitation");
+      }
+      function markSound(on) {
+        soundReady = on;
+        hostsLive.muted = !on;
+        hostsLive.volume = 1;
+        hostsStage.classList.toggle("needs-sound", !on);
+        hostsStage.setAttribute("aria-label", on ? "Invitation playing with sound" : "Tap anywhere for sound");
       }
       function startTalking(withSound) {
         hostsStage.classList.add("is-playing");
+        hostsLive.volume = 1;
         hostsLive.muted = !withSound;
         var pending = hostsLive.play();
-        if (pending && pending.catch) {
-          return pending.catch(function () {
+        if (pending && pending.then) {
+          return pending.then(function () {
+            markSound(!hostsLive.muted);
+          }).catch(function () {
             if (withSound) return startTalking(false);
             showStill();
           });
         }
+        markSound(withSound);
       }
-      hostsLive.addEventListener("ended", showStill);
-      hostsStage.addEventListener("click", function () {
+      function unlockSound() {
+        if (soundReady) return;
+        soundReady = true;
         hostsLive.currentTime = 0;
         startTalking(true);
+      }
+      hostsLive.addEventListener("ended", function () {
+        soundReady = false;
+        showStill();
       });
-      startTalking(true);
+      hostsStage.addEventListener("click", unlockSound);
+      ["pointerdown", "keydown"].forEach(function (eventName) {
+        document.addEventListener(eventName, unlockSound, { capture: true });
+      });
+      if (hostsLive.readyState >= 2) startTalking(true);
+      else hostsLive.addEventListener("canplay", function () { startTalking(true); }, { once: true });
     })();
   </script>
 </body>
